@@ -19,7 +19,7 @@ package txpool
 import (
 	"context"
 	"errors"
-	"fmt"
+	// "fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -777,84 +777,84 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	// Accept only legacy transactions until EIP-2718/2930 activates.
-	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
-		return core.ErrTxTypeNotSupported
-	}
-	// Reject dynamic fee transactions until EIP-1559 activates.
-	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
-		return core.ErrTxTypeNotSupported
-	}
-	// Reject transactions over defined size to prevent DOS attacks
-	if tx.Size() > txMaxSize {
-		return ErrOversizedData
-	}
-	// Check whether the init code size has been exceeded.
-	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
-		return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
-	}
-	// Transactions can't be negative. This may never happen using RLP decoded
-	// transactions but may occur if you create a transaction using the RPC.
-	if tx.Value().Sign() < 0 {
-		return core.ErrNegativeValue
-	}
-	// Ensure the transaction doesn't exceed the current block limit gas.
-	if pool.currentMaxGas < tx.Gas() {
-		return ErrGasLimit
-	}
-	// Sanity check for extremely large numbers
-	if tx.GasFeeCap().BitLen() > 256 {
-		return core.ErrFeeCapVeryHigh
-	}
-	if tx.GasTipCap().BitLen() > 256 {
-		return core.ErrTipVeryHigh
-	}
-	// Ensure gasFeeCap is greater than or equal to gasTipCap.
-	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
-		return core.ErrTipAboveFeeCap
-	}
-	// Make sure the transaction is signed properly.
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
-	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		return ErrUnderpriced
-	}
-	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return core.ErrNonceTooLow
-	}
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	balance := pool.currentState.GetBalance(from)
-	if balance.Cmp(tx.Cost()) < 0 {
-		return core.ErrInsufficientFunds
-	}
+	// // Accept only legacy transactions until EIP-2718/2930 activates.
+	// if !pool.eip2718 && tx.Type() != types.LegacyTxType {
+	// 	return core.ErrTxTypeNotSupported
+	// }
+	// // Reject dynamic fee transactions until EIP-1559 activates.
+	// if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
+	// 	return core.ErrTxTypeNotSupported
+	// }
+	// // Reject transactions over defined size to prevent DOS attacks
+	// if tx.Size() > txMaxSize {
+	// 	return ErrOversizedData
+	// }
+	// // Check whether the init code size has been exceeded.
+	// if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
+	// 	return fmt.Errorf("%w: code size %v limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
+	// }
+	// // Transactions can't be negative. This may never happen using RLP decoded
+	// // transactions but may occur if you create a transaction using the RPC.
+	// if tx.Value().Sign() < 0 {
+	// 	return core.ErrNegativeValue
+	// }
+	// // Ensure the transaction doesn't exceed the current block limit gas.
+	// if pool.currentMaxGas < tx.Gas() {
+	// 	return ErrGasLimit
+	// }
+	// // Sanity check for extremely large numbers
+	// if tx.GasFeeCap().BitLen() > 256 {
+	// 	return core.ErrFeeCapVeryHigh
+	// }
+	// if tx.GasTipCap().BitLen() > 256 {
+	// 	return core.ErrTipVeryHigh
+	// }
+	// // Ensure gasFeeCap is greater than or equal to gasTipCap.
+	// if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
+	// 	return core.ErrTipAboveFeeCap
+	// }
+	// // Make sure the transaction is signed properly.
+	// from, err := types.Sender(pool.signer, tx)
+	// if err != nil {
+	// 	return ErrInvalidSender
+	// }
+	// // Drop non-local transactions under our own minimal accepted gas price or tip
+	// if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
+	// 	return ErrUnderpriced
+	// }
+	// // Ensure the transaction adheres to nonce ordering
+	// if pool.currentState.GetNonce(from) > tx.Nonce() {
+	// 	return core.ErrNonceTooLow
+	// }
+	// // Transactor should have enough funds to cover the costs
+	// // cost == V + GP * GL
+	// balance := pool.currentState.GetBalance(from)
+	// if balance.Cmp(tx.Cost()) < 0 {
+	// 	return core.ErrInsufficientFunds
+	// }
 
-	// Verify that replacing transactions will not result in overdraft
-	list := pool.pending[from]
-	if list != nil { // Sender already has pending txs
-		sum := new(big.Int).Add(tx.Cost(), list.totalcost)
-		if repl := list.txs.Get(tx.Nonce()); repl != nil {
-			// Deduct the cost of a transaction replaced by this
-			sum.Sub(sum, repl.Cost())
-		}
-		if balance.Cmp(sum) < 0 {
-			log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
-			return ErrOverdraft
-		}
-	}
+	// // Verify that replacing transactions will not result in overdraft
+	// list := pool.pending[from]
+	// if list != nil { // Sender already has pending txs
+	// 	sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+	// 	if repl := list.txs.Get(tx.Nonce()); repl != nil {
+	// 		// Deduct the cost of a transaction replaced by this
+	// 		sum.Sub(sum, repl.Cost())
+	// 	}
+	// 	if balance.Cmp(sum) < 0 {
+	// 		log.Trace("Replacing transactions would overdraft", "sender", from, "balance", pool.currentState.GetBalance(from), "required", sum)
+	// 		return ErrOverdraft
+	// 	}
+	// }
 
-	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
-	if err != nil {
-		return err
-	}
-	if tx.Gas() < intrGas {
-		return core.ErrIntrinsicGas
-	}
+	// // Ensure the transaction has more gas than the basic tx fee.
+	// intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.istanbul, pool.shanghai)
+	// if err != nil {
+	// 	return err
+	// }
+	// if tx.Gas() < intrGas {
+	// 	return core.ErrIntrinsicGas
+	// }
 	return nil
 }
 
@@ -1591,21 +1591,21 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		if list == nil {
 			continue // Just in case someone calls with a non existing account
 		}
-		// Drop all transactions that are deemed too old (low nonce)
-		forwards := list.Forward(pool.currentState.GetNonce(addr))
-		for _, tx := range forwards {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-		}
-		log.Trace("Removed old queued transactions", "count", len(forwards))
-		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-		}
-		log.Trace("Removed unpayable queued transactions", "count", len(drops))
-		queuedNofundsMeter.Mark(int64(len(drops)))
+		// // Drop all transactions that are deemed too old (low nonce)
+		// forwards := list.Forward(pool.currentState.GetNonce(addr))
+		// for _, tx := range forwards {
+		// 	hash := tx.Hash()
+		// 	pool.all.Remove(hash)
+		// }
+		// log.Trace("Removed old queued transactions", "count", len(forwards))
+		// // Drop all transactions that are too costly (low balance or out of gas)
+		// drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		// for _, tx := range drops {
+		// 	hash := tx.Hash()
+		// 	pool.all.Remove(hash)
+		// }
+		// log.Trace("Removed unpayable queued transactions", "count", len(drops))
+		// queuedNofundsMeter.Mark(int64(len(drops)))
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
@@ -1630,10 +1630,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			queuedRateLimitMeter.Mark(int64(len(caps)))
 		}
 		// Mark all the items dropped as removed
-		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
-		queuedGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
+		pool.priced.Removed(len(caps))
+		queuedGauge.Dec(int64(len(caps)))
 		if pool.locals.contains(addr) {
-			localGauge.Dec(int64(len(forwards) + len(drops) + len(caps)))
+			localGauge.Dec(int64(len(caps)))
 		}
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {

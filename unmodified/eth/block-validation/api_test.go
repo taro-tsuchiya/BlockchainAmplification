@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"fmt"
+	"encoding/csv"
 
 	capellaapi "github.com/attestantio/go-builder-client/api/capella"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
@@ -1279,12 +1281,15 @@ func createInitBlocks(
 	// Allocate funds to important users
 	allocMap := make(core.GenesisAlloc)
 	defaultBalance := math.BigPow(2, 256)
+	smallBalance := new(big.Int) 
+	// We fund 0.99 ether for each attacker (when sending 1 ether it becomes invalid)
+	smallBalance.SetString("990000000000000000", 10)
 	allocMap[validatorAddr] = core.GenesisAccount{Balance: defaultBalance}
 	for _, addr := range honestAddrs {
 		allocMap[addr] = core.GenesisAccount{Balance: defaultBalance}
 	}
 	for _, addr := range attackerAddrs {
-		allocMap[addr] = core.GenesisAccount{Balance: defaultBalance}
+		allocMap[addr] = core.GenesisAccount{Balance: smallBalance}
 	}
 
 	if testnet {
@@ -1332,36 +1337,46 @@ func createInitBlocks(
 
 	generate := func(i int, g *core.BlockGen) {
 		g.SetCoinbase(validatorAddr)
-		if i == 0 {
-			// Create the attack contract
-			tx, _ := types.SignTx(types.NewContractCreation(
-				g.TxNonce(attackerAddrs[0]), new(big.Int), 30000000, g.BaseFee(),
-				attackCode,
-			), types.LatestSigner(config), attackerKeys[0])
-			g.AddTx(tx)
-		} else if i == 1 {
+		// We do not need a smart contract or validator's txs
+		
+		// if i == 0 {
+		// 	// Create the attack contract
+		// 	tx, _ := types.SignTx(types.NewContractCreation(
+		// 		g.TxNonce(attackerAddrs[0]), new(big.Int), 30000000, g.BaseFee(),
+		// 		attackCode,
+		// 	), types.LatestSigner(config), attackerKeys[0])
+		// 	g.AddTx(tx)
+		// } else if i == 1 {
+
+		// When the block number is odd, honest users send transactions to each other in a ring
+		if i % 2 == 0 {
 			ringTxsBlockGenerator(
 				honestKeys, honestAddrs, defaultBalance, len(honestAddrs),
 			)(i, g)
-		} else if i < 10{
-			valueTxBlockGenerator(validatorKey, validatorAddr, 100*1024)(i, g)
-		} else {
-			j := int((g.PrevBlock(i - 1).GasLimit() / 21000) / 4)
-			for j > 0 {
-				j--
-				curKey, _ := crypto.GenerateKey()
-				curAddr := crypto.PubkeyToAddress(curKey.PublicKey)
-				tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
-					Nonce:     g.TxNonce(validatorAddr),
-					To:        &curAddr,
-					Value:     big.NewInt(0),
-					Gas:       21000,
-					GasFeeCap: g.BaseFee(),
-					GasTipCap: big.NewInt(0),
-					Data:      nil,
-				}), types.LatestSigner(config), validatorKey)
-				g.AddTx(tx)
-			}
+		} else if i % 2 == 1 {
+			ringTxsBlockGenerator(
+				attackerKeys, attackerAddrs, smallBalance, len(attackerAddrs),
+			)(i, g)
+		//
+		// } else if i < 10{
+		// 	valueTxBlockGenerator(validatorKey, validatorAddr, 100*1024)(i, g)
+		// } else {
+		// 	j := int((g.PrevBlock(i - 1).GasLimit() / 21000) / 4)
+		// 	for j > 0 {
+		// 		j--
+		// 		curKey, _ := crypto.GenerateKey()
+		// 		curAddr := crypto.PubkeyToAddress(curKey.PublicKey)
+		// 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+		// 			Nonce:     g.TxNonce(validatorAddr),
+		// 			To:        &curAddr,
+		// 			Value:     big.NewInt(0),
+		// 			Gas:       21000,
+		// 			GasFeeCap: g.BaseFee(),
+		// 			GasTipCap: big.NewInt(0),
+		// 			Data:      nil,
+		// 		}), types.LatestSigner(config), validatorKey)
+		// 		g.AddTx(tx)
+		// 	}
 		}
 	}
 	gblock := genesis.MustCommit(db)
@@ -1405,11 +1420,12 @@ func valueTxBlockGenerator(
 // ringTxsBlockGenerator returns a block generator that sends ETH in a ring among n accounts.
 // This creates ringLen entries in the state database and fills the blocks with many
 // small transactions.
+// This time only sends 1 wei for each tx
 func ringTxsBlockGenerator(
 	keys []*ecdsa.PrivateKey, addrs []common.Address, defaultBalance *big.Int, ringLen int,
 ) func(int, *core.BlockGen) {
 	from := 0
-	availableFunds := new(big.Int).Set(defaultBalance)
+	// availableFunds := new(big.Int).Set(defaultBalance)
 	return func(i int, gen *core.BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
@@ -1424,17 +1440,18 @@ func ringTxsBlockGenerator(
 				break
 			}
 			to := (from + 1) % ringLen
-			burn := new(big.Int).SetUint64(params.TxGas)
-			burn.Mul(burn, gen.BaseFee())
-			availableFunds.Sub(availableFunds, burn)
-			if availableFunds.Cmp(big.NewInt(1)) < 0 {
-				panic("Not enough funds")
-			}
+			// burn := new(big.Int).SetUint64(params.TxGas)
+			// burn.Mul(burn, gen.BaseFee())
+			// availableFunds.Sub(availableFunds, burn)
+			value := big.NewInt(1)
+			// if availableFunds.Cmp(big.NewInt(1)) < 0 {
+			// 	panic("Not enough funds")
+			// }
 			tx, err := types.SignNewTx(keys[from], signer,
 				&types.LegacyTx{
 					Nonce:    gen.TxNonce(addrs[from]),
 					To:       &addrs[to],
-					Value:    availableFunds,
+					Value:    value,
 					Gas:      params.TxGas,
 					GasPrice: gasPrice,
 				})
@@ -1565,4 +1582,370 @@ func executableDataToExecutionPayloadV2(data *engine.ExecutableData) (*capella.E
 		Transactions:  transactionData,
 		Withdrawals:   withdrawalData,
 	}, nil
+}
+
+// Implement the basic eviction attack (placing the high gas)
+func TestBasicEvictsMempoolMultipleAccounts(t *testing.T) {
+	genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, 80, false)
+	node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+	defer node.Close()
+
+	api := createApi(ethservice, validatorAddr, false)
+	txPool := ethservice.TxPool()
+	baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+	// All honest and attack addresses should have 0 TXs before we start
+	honestPending, attackerPending := getPending(txPool, honestAddrs, attackerAddrs)
+	require.EqualValues(t, 0, len(honestPending))
+	require.EqualValues(t, 0, len(attackerPending))
+
+	honestFee := new(big.Int).Mul(baseFee, big.NewInt(10))
+	honestTxs := createTxs(
+		txPool, signer, honestAddrs, honestKeys, uint64(64), &honestAddrs[0],
+		big.NewInt(1), 21000, honestFee, honestFee,
+		nil,
+	)
+	txPool.AddRemotesSync(honestTxs)
+
+	// The honest TXs currently occupy the mempool
+	honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+	require.EqualValues(t, 5120, len(honestPending))
+	require.EqualValues(t, 0, len(attackerPending))
+	t.Log("Number of honest pending TXs before the attack: ", len(honestPending))
+	
+	// Without the attack, the honest TXs will be included in the upcoming block.
+	blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+	require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]))
+
+	// Create a random address that the TXs will be sent to
+	key, _ := crypto.GenerateKey()
+	addrs := crypto.PubkeyToAddress(key.PublicKey)
+	attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
+	attackerTxs := createTxs(
+		txPool, signer, attackerAddrs, attackerKeys, 64,
+		&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
+	)
+	for _, tx := range attackerTxs {
+		txPool.AddRemotesSync([]*types.Transaction{tx})
+	}
+
+	honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+
+	t.Log(
+		"Txpool Number of honest Tx: ", len(honestPending), 
+		"Txpool Number of attack Tx: ", len(attackerPending),
+	)
+
+	require.GreaterOrEqual(t, 5119, len(honestPending))
+
+	blockRequest = createBlock(ethservice, api, validatorKey, validatorAddr)
+
+	// Check the number of honest and attacker TXs in the block
+	t.Log(
+		"Block Number of honest TXs: ", countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]), "\n", 
+		"Block Number of attacker TXs: ", countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs),
+	)
+
+	// All block txs are from the attacker address
+	require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
+}
+
+
+func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
+	var honestPendingCounts []int
+    var attackerPendingCounts []int
+	var honestBlockTxsCounts []int
+	var attackerBlockTxsCounts []int
+	
+	for x := 40; x <= 2000; x += 40 {	
+		genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, x, false)
+		node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+
+		api := createApi(ethservice, validatorAddr, false)
+		txPool := ethservice.TxPool()
+		baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+		// All honest and attack addresses should have 0 TXs before we start
+		honestPending, attackerPending := getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 0, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+
+		honestFee := new(big.Int).Mul(baseFee, big.NewInt(10))
+		honestTxs := createTxs(
+			txPool, signer, honestAddrs, honestKeys, uint64(64), &honestAddrs[0],
+			big.NewInt(1), 21000, honestFee, honestFee,
+			nil,
+		)
+		txPool.AddRemotesSync(honestTxs)
+
+		// The honest TXs currently occupy the mempool
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 5120, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+		t.Log("Number of honest pending TXs before the attack: ", len(honestPending))
+		
+		// Without the attack, the honest TXs will be included in the upcoming block.
+		blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+		require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]))
+		t.Log(
+			"Number of TXs in the upcoming block before the attack: ",
+			len(blockRequest.ExecutionPayload.Transactions), 
+		)
+
+		// Create a random address that the TXs will be sent to
+		key, _ := crypto.GenerateKey()
+		addrs := crypto.PubkeyToAddress(key.PublicKey)
+		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
+		attackerTxs := createTxs(
+			txPool, signer, attackerAddrs, attackerKeys, 32,
+			&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
+		)
+		for _, tx := range attackerTxs {
+			txPool.AddRemotesSync([]*types.Transaction{tx})
+		}
+
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+
+		honestPendingCounts = append(honestPendingCounts, len(honestPending))
+        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+
+		t.Log(
+			"Txpool Number of honest Tx: ", len(honestPending), "\n",
+			"Txpool Number of attack Tx: ", len(attackerPending),
+		)
+
+		blockRequest = createBlock(ethservice, api, validatorKey, validatorAddr)
+		honestBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0])
+		attackerBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs)
+
+		t.Log(
+			"Block Number of honest TXs: ", honestBlockTxsCount, "\n", 
+			"Block Number of attacker TXs: ", attackerBlockTxsCount,
+		)
+
+		honestBlockTxsCounts = append(honestBlockTxsCounts, honestBlockTxsCount)
+		attackerBlockTxsCounts = append(attackerBlockTxsCounts, attackerBlockTxsCount)	
+		// We do not impose the requirement below bc the total number of attack transactions < 1427 when attacker = 40
+		// require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
+	
+		node.Close()
+	}
+
+	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
+    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	
+	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
+    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+
+	// Create a CSV file
+	file, err := os.Create("baseline_change_addr.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	writer.Write([]string{"x", "honestPendingCounts", "attackerPendingCounts", "honestBlockTxsCounts", "attackerBlockTxsCounts"})
+
+	// Write the data
+	for i := 0; i < len(honestPendingCounts); i++ {
+		writer.Write([]string{
+			strconv.Itoa(i * 40 + 40),
+			strconv.Itoa(honestPendingCounts[i]),
+			strconv.Itoa(attackerPendingCounts[i]),
+			strconv.Itoa(honestBlockTxsCounts[i]),
+			strconv.Itoa(attackerBlockTxsCounts[i]),
+		})
+	}
+}
+
+// Change the number of attack addresses 
+func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
+	var honestPendingCounts []int
+    var attackerPendingCounts []int
+	var honestBlockTxsCounts []int
+	var attackerBlockTxsCounts []int
+
+	for x := 40; x <= 2000; x += 40 {	
+		genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, x, false)
+		node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+
+		api := createApi(ethservice, validatorAddr, false)
+		txPool := ethservice.TxPool()
+		baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+		// All honest and attack addresses should have 0 TXs before we start
+		honestPending, attackerPending := getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 0, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+
+		honestFee := new(big.Int).Mul(baseFee, big.NewInt(10))
+		honestTxs := createTxs(
+			txPool, signer, honestAddrs, honestKeys, uint64(64), &honestAddrs[0],
+			big.NewInt(1), 21000, honestFee, honestFee,
+			nil,
+		)
+		txPool.AddRemotesSync(honestTxs)
+
+		// The honest TXs currently occupy the mempool
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 5120, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+		t.Log("Number of honest pending TXs before the attack: ", len(honestPending))
+		
+		// Without the attack, the honest TXs will be included in the upcoming block.
+		blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+		require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]))
+		t.Log(
+			"Number of TXs in the upcoming block before the attack: ",
+			len(blockRequest.ExecutionPayload.Transactions),
+		)
+
+		// Create a random address that the TXs will be sent to
+		key, _ := crypto.GenerateKey()
+		addrs := crypto.PubkeyToAddress(key.PublicKey)
+		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
+		attackerTxs := createMemPurgeTxs(
+			ethservice, txPool, signer, attackerAddrs, attackerKeys, 32,
+			&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
+		)
+		for _, tx := range attackerTxs {
+			txPool.AddRemotesSync([]*types.Transaction{tx})
+		}
+
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+
+		honestPendingCounts = append(honestPendingCounts, len(honestPending))
+        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+
+		t.Log(
+			"Txpool Number of honest Tx: ", len(honestPending), 
+			"Txpool Number of attack Tx: ", len(attackerPending),
+		)
+
+		blockRequest = createBlock(ethservice, api, validatorKey, validatorAddr)
+
+		honestBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0])
+		attackerBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs)
+
+		t.Log(
+			"Block Number of honest TXs: ", honestBlockTxsCount, "\n", 
+			"Block Number of attacker TXs: ", attackerBlockTxsCount,
+		)
+
+		honestBlockTxsCounts = append(honestBlockTxsCounts, honestBlockTxsCount)
+		attackerBlockTxsCounts = append(attackerBlockTxsCounts, attackerBlockTxsCount)	
+
+		node.Close()
+	}
+
+	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
+    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	
+	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
+    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+
+	// Create a CSV file
+	file, err := os.Create("mempurge_change_addr.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	writer.Write([]string{"x", "honestPendingCounts", "attackerPendingCounts", "honestBlockTxsCounts", "attackerBlockTxsCounts"})
+
+	// Write the data
+	for i := 0; i < len(honestPendingCounts); i++ {
+		writer.Write([]string{
+			strconv.Itoa(i * 40 + 40),
+			strconv.Itoa(honestPendingCounts[i]),
+			strconv.Itoa(attackerPendingCounts[i]),
+			strconv.Itoa(honestBlockTxsCounts[i]),
+			strconv.Itoa(attackerBlockTxsCounts[i]),
+		})
+	}
+}
+
+// EDoS attack tests
+// Create invalid transactions (insufficient balance), 
+// Need to specify the large value (e.g., 1 ether) which is bigger than the account balance
+func createEDoSTxs(
+	ethservice *eth.Ethereum, 
+	txPool *txpool.TxPool, signer types.Signer, addrs []common.Address,
+	keys []*ecdsa.PrivateKey, txNum uint64, to *common.Address,
+	value *big.Int, gas uint64, gasFee *big.Int, gasTip *big.Int,
+	data []byte,
+) types.Transactions {
+	statedb, _ := ethservice.BlockChain().State()
+	i := 0
+	txs := make(types.Transactions, len(addrs) * int(txNum))
+	for j, addr := range addrs {
+		accountBalance := statedb.GetBalance(addr) 
+		// nonce := txPool.Nonce(addr)
+		// fmt.Println("Nonce is : ", nonce)
+		// fmt.Println("Current balance is : ", accountBalance)
+		
+		for curNum := uint64(0); curNum < txNum; curNum += 1 {
+			// Check if transfer value is smaller than accountBalance (not EDoS attack)
+			if value.Cmp(accountBalance) < 0 {
+				fmt.Println("Normal transaction (not invalid)")
+			}
+
+			tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+				// start from 0 regardless of the current nonce
+				Nonce:     0 + curNum,
+				To:        to,
+				Value:     value,
+				Gas:       gas,
+				GasFeeCap: gasFee,
+				GasTipCap: gasTip,
+				Data:      data,
+			}), signer, keys[j])
+			txs[i] = tx
+			i += 1
+		}
+	}
+	return txs
+}
+
+// The most basic EDoS attack 
+func TestEDoSBasis(t *testing.T) {
+	genesis, initBlocks, validatorKey, validatorAddr, _, _, attackerKeys, attackerAddrs := createState(10, attackCode, 1, 1, false)
+	node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+	defer node.Close()
+
+	api := createApi(ethservice, validatorAddr, false)
+	txPool := ethservice.TxPool()
+	baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+	// Create a random address that the TXs will be sent to
+	key, _ := crypto.GenerateKey()
+	addrs := crypto.PubkeyToAddress(key.PublicKey)
+
+	// 0 TXs in txpool before we start
+	_, attackerPending := getPending(txPool, []common.Address{}, attackerAddrs)
+	require.EqualValues(t, 0, len(attackerPending))
+
+	// Pay 10 times more than usual for the attacker's TXs
+	attackerFee := new(big.Int).Add(baseFee, big.NewInt(10))
+	for _, tx := range createEDoSTxs(
+		// send 1 ether
+		ethservice, txPool, signer, attackerAddrs, attackerKeys, 64,
+		&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
+	) {
+		txPool.AddRemotesSync([]*types.Transaction{tx})
+
+		_, attackerPending = getPending(txPool, []common.Address{}, attackerAddrs)
+	}
+	// All the invalid txs are included in txpool
+	require.EqualValues(t, 64, len(attackerPending))
+
+	// All but only one transaction (the proposer payment TX) is included in the block 
+	blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+	require.EqualValues(t, 0, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
 }

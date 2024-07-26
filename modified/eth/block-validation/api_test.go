@@ -615,7 +615,7 @@ func TestMemPurgeEvictsMempoolMultipleAccounts(t *testing.T) {
 	require.GreaterOrEqual(t, 80, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
 }
 
-// TestMemPurgeEvictsMempoolOneAccount shows that an attacker can evict existing
+// TestMemPurgeEvictsMempoolOneAccount shows that an attacker (with multiple accounts) can evict existing
 // honest TXs from the mempool, if it is completely full by transactions from a
 // single honest account.
 func TestMemPurgeEvictsMempoolOneAccount(t *testing.T) {
@@ -1704,7 +1704,7 @@ func TestEDoSEvictsMempoolOneAccount(t *testing.T) {
 	// Create a random address that the TXs will be sent to
 	key, _ := crypto.GenerateKey()
 	addrs := crypto.PubkeyToAddress(key.PublicKey)
-	// Set slightly higher gas fee than honest users
+	// Attacker can set a higher gas fee than honest users (no tx cost)
 	attackerFee := new(big.Int).Add(baseFee, big.NewInt(11))
 	// each attack account sends 64 txs
 	attackerTxs := createEDoSTxs(
@@ -1801,7 +1801,7 @@ func TestEDoSEvictsMempoolMultipleAccounts(t *testing.T) {
 
 func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 	var honestPendingCounts []int
-    var attackerPendingCounts []int
+	var attackerPendingCounts []int
 	var honestBlockTxsCounts []int
 	var attackerBlockTxsCounts []int
 
@@ -1865,7 +1865,7 @@ func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 
 		// save the data
 		honestPendingCounts = append(honestPendingCounts, len(honestPending))
-        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
 
 		// Make sure the honest txs are evicted (to some extent)
 		require.GreaterOrEqual(t, 5119, len(honestPending))
@@ -1893,10 +1893,10 @@ func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 	}
 
 	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
-    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
 	
 	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
-    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
 	file, err := os.Create("edos_change_addr.csv")
@@ -1991,7 +1991,7 @@ func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
 
 		// save the data
 		honestPendingCounts = append(honestPendingCounts, len(honestPending))
-        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
 
 		// Make sure the honest txs are evicted (to some extent)
 		require.GreaterOrEqual(t, 5119, len(honestPending))
@@ -2019,10 +2019,10 @@ func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
 	}
 
 	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
-    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
 	
 	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
-    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
 	file, err := os.Create("edos_change_txs.csv")

@@ -2,7 +2,7 @@
 
 We implement our attack simulation on the top of our related work [SpeculativeDoS](https://github.com/AvivYaish/SpeculativeDoS). 
 Please refer to our commit history to review the modifications made to the existing settings. 
-We begn modifying the codebase after the 3rd commit.
+We begin modifying the codebase after the 3rd commit.
 
 To reproduce our resuts, please do the following.
 1. Clone our repository, and install Go version 1.19 (or higher) on your machine. 
@@ -50,13 +50,13 @@ We test our EDoS attack on our modified node.
 ### TestEDoSEvictsMempoolOneAccount
 - We adhere to the settings used in ``TestMemPurgeEvictsMempoolOneAccount``.
 - 1 honest account, and 79 accounts. 
-- An honest account initially sends 5120  transactions to completely fill the txpool.
+- An honest account initially sends 5120 transactions to completely fill the txpool.
 - If the block were to be mined, it would include 1427 honest transactions. 1427 is the maximum number of basic transfer transactions allowed in a single block.
 - Each attack account sends 64 invalid transactions with insufficient balance and past nonces.
 - After the attack, some honest transactions are evicted from the txpool and replaced by the attackers. 
 - If the block were to be created, no attack transactions are included in the block. This aspect distinguishes our attack from MemPurge or the Baseline approach.
 
-### TestEDoSEvictsMempoolMultipleAccount
+### TestEDoSEvictsMempoolMultipleAccounts
 - We adhere to the settings used in ``TestMemPurgeEvictsMempoolMultipleAccounts``. 
 - The test resembles ``TestEDoSEvictsMempoolOneAccount``, but in this case, the txpool is filled by multiple honest accounts, making eviction more challenging. 
 - Each honest account initially sends 64 transactions to collectively fill the txpool.

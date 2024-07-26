@@ -1622,7 +1622,7 @@ func TestBasicEvictsMempoolMultipleAccounts(t *testing.T) {
 	addrs := crypto.PubkeyToAddress(key.PublicKey)
 	attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
 	attackerTxs := createTxs(
-		txPool, signer, attackerAddrs, attackerKeys, 64,
+		txPool, signer, attackerAddrs, attackerKeys, 32,
 		&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
 	)
 	for _, tx := range attackerTxs {
@@ -1653,7 +1653,7 @@ func TestBasicEvictsMempoolMultipleAccounts(t *testing.T) {
 
 func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
 	var honestPendingCounts []int
-    var attackerPendingCounts []int
+	var attackerPendingCounts []int
 	var honestBlockTxsCounts []int
 	var attackerBlockTxsCounts []int
 	
@@ -1707,7 +1707,7 @@ func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
 		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
 
 		honestPendingCounts = append(honestPendingCounts, len(honestPending))
-        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
 
 		t.Log(
 			"Txpool Number of honest Tx: ", len(honestPending), "\n",
@@ -1732,10 +1732,10 @@ func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
 	}
 
 	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
-    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
 	
 	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
-    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
 	file, err := os.Create("baseline_change_addr.csv")
@@ -1764,7 +1764,7 @@ func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
 // Change the number of attack addresses 
 func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
 	var honestPendingCounts []int
-    var attackerPendingCounts []int
+	var attackerPendingCounts []int
 	var honestBlockTxsCounts []int
 	var attackerBlockTxsCounts []int
 
@@ -1818,7 +1818,7 @@ func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
 		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
 
 		honestPendingCounts = append(honestPendingCounts, len(honestPending))
-        attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
 
 		t.Log(
 			"Txpool Number of honest Tx: ", len(honestPending), 
@@ -1842,10 +1842,10 @@ func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
 	}
 
 	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
-    t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
 	
 	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
-    t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
 	file, err := os.Create("mempurge_change_addr.csv")

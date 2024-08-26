@@ -5,7 +5,7 @@ Please refer to our commit history to review the modifications made to the exist
 We begin modifying the codebase after the 3rd commit.
 
 To reproduce our resuts, please do the following.
-1. Clone our repository, and install Go version 1.19 (or higher) on your machine. 
+1. Clone our repository, and install Go version higher than 1.19 but lower than 1.23 on your machine. (The current go 1.23 has an issue in runtime package when you compile from the sourcecode)
 2. Move to the test location. 
 
 For EDoS attack 
@@ -31,6 +31,7 @@ go test -v -run=TestEDoSBasis -timeout=0s
 - We also ensure that the gas price for each attack transaction remains consistent across different attacks.
 - We employ the same set of parameters use in Geth or SpeculativeDoS. 
 - For example, the txpool size is 6334 (5120 global slots and 1024 global queue). Generally, the txpool only utilizes the global slot unless the number of accounts exceeds a certain threshold (typically more than 5120/16=320 accounts).
+- Here, we test our EDoS attack on the modified node, and Baseline and MemPurge on the unmodified node. You can yield the exact same results when testing all three attacks on the modified nodes. 
 
 
 # Tests

@@ -2048,3 +2048,224 @@ func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
 	}
 	t.Log("File is saved!")
 }
+
+// Basic / Mempurge also works the same on a modified node
+func TestBasicEvictsMempoolChangeNumAddr(t *testing.T) {
+	var honestPendingCounts []int
+	var attackerPendingCounts []int
+	var honestBlockTxsCounts []int
+	var attackerBlockTxsCounts []int
+	
+	for x := 40; x <= 2000; x += 40 {	
+		genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, x, false)
+		node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+
+		api := createApi(ethservice, validatorAddr, false)
+		txPool := ethservice.TxPool()
+		baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+		// All honest and attack addresses should have 0 TXs before we start
+		honestPending, attackerPending := getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 0, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+
+		honestFee := new(big.Int).Mul(baseFee, big.NewInt(10))
+		honestTxs := createTxs(
+			txPool, signer, honestAddrs, honestKeys, uint64(64), &honestAddrs[0],
+			big.NewInt(1), 21000, honestFee, honestFee,
+			nil,
+		)
+		txPool.AddRemotesSync(honestTxs)
+
+		// The honest TXs currently occupy the mempool
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 5120, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+		t.Log("Number of honest pending TXs before the attack: ", len(honestPending))
+		
+		// Without the attack, the honest TXs will be included in the upcoming block.
+		blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+		require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]))
+		t.Log(
+			"Number of TXs in the upcoming block before the attack: ",
+			len(blockRequest.ExecutionPayload.Transactions), 
+		)
+
+		// Create a random address that the TXs will be sent to
+		key, _ := crypto.GenerateKey()
+		addrs := crypto.PubkeyToAddress(key.PublicKey)
+		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
+		attackerTxs := createTxs(
+			txPool, signer, attackerAddrs, attackerKeys, 32,
+			&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
+		)
+		for _, tx := range attackerTxs {
+			txPool.AddRemotesSync([]*types.Transaction{tx})
+		}
+
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+
+		honestPendingCounts = append(honestPendingCounts, len(honestPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+
+		t.Log(
+			"Txpool Number of honest Tx: ", len(honestPending), "\n",
+			"Txpool Number of attack Tx: ", len(attackerPending),
+		)
+
+		blockRequest = createBlock(ethservice, api, validatorKey, validatorAddr)
+		honestBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0])
+		attackerBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs)
+
+		t.Log(
+			"Block Number of honest TXs: ", honestBlockTxsCount, "\n", 
+			"Block Number of attacker TXs: ", attackerBlockTxsCount,
+		)
+
+		honestBlockTxsCounts = append(honestBlockTxsCounts, honestBlockTxsCount)
+		attackerBlockTxsCounts = append(attackerBlockTxsCounts, attackerBlockTxsCount)	
+		// We do not impose the requirement below bc the total number of attack transactions < 1427 when attacker = 40
+		// require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
+	
+		node.Close()
+	}
+
+	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	
+	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+
+	// Create a CSV file
+	file, err := os.Create("baseline_change_addr.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	writer.Write([]string{"x", "honestPendingCounts", "attackerPendingCounts", "honestBlockTxsCounts", "attackerBlockTxsCounts"})
+
+	// Write the data
+	for i := 0; i < len(honestPendingCounts); i++ {
+		writer.Write([]string{
+			strconv.Itoa(i * 40 + 40),
+			strconv.Itoa(honestPendingCounts[i]),
+			strconv.Itoa(attackerPendingCounts[i]),
+			strconv.Itoa(honestBlockTxsCounts[i]),
+			strconv.Itoa(attackerBlockTxsCounts[i]),
+		})
+	}
+}
+
+// Change the number of attack addresses 
+func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
+	var honestPendingCounts []int
+	var attackerPendingCounts []int
+	var honestBlockTxsCounts []int
+	var attackerBlockTxsCounts []int
+
+	for x := 40; x <= 2000; x += 40 {	
+		genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, x, false)
+		node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
+
+		api := createApi(ethservice, validatorAddr, false)
+		txPool := ethservice.TxPool()
+		baseFee := ethservice.Miner().PendingBlock().BaseFee()
+
+		// All honest and attack addresses should have 0 TXs before we start
+		honestPending, attackerPending := getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 0, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+
+		honestFee := new(big.Int).Mul(baseFee, big.NewInt(10))
+		honestTxs := createTxs(
+			txPool, signer, honestAddrs, honestKeys, uint64(64), &honestAddrs[0],
+			big.NewInt(1), 21000, honestFee, honestFee,
+			nil,
+		)
+		txPool.AddRemotesSync(honestTxs)
+
+		// The honest TXs currently occupy the mempool
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+		require.EqualValues(t, 5120, len(honestPending))
+		require.EqualValues(t, 0, len(attackerPending))
+		t.Log("Number of honest pending TXs before the attack: ", len(honestPending))
+		
+		// Without the attack, the honest TXs will be included in the upcoming block.
+		blockRequest := createBlock(ethservice, api, validatorKey, validatorAddr)
+		require.EqualValues(t, 1427, countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0]))
+		t.Log(
+			"Number of TXs in the upcoming block before the attack: ",
+			len(blockRequest.ExecutionPayload.Transactions),
+		)
+
+		// Create a random address that the TXs will be sent to
+		key, _ := crypto.GenerateKey()
+		addrs := crypto.PubkeyToAddress(key.PublicKey)
+		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
+		attackerTxs := createMemPurgeTxs(
+			ethservice, txPool, signer, attackerAddrs, attackerKeys, 32,
+			&addrs, big.NewInt(1), 21000, attackerFee, attackerFee, nil,
+		)
+		for _, tx := range attackerTxs {
+			txPool.AddRemotesSync([]*types.Transaction{tx})
+		}
+
+		honestPending, attackerPending = getPending(txPool, honestAddrs, attackerAddrs)
+
+		honestPendingCounts = append(honestPendingCounts, len(honestPending))
+		attackerPendingCounts = append(attackerPendingCounts, len(attackerPending))
+
+		t.Log(
+			"Txpool Number of honest Tx: ", len(honestPending), 
+			"Txpool Number of attack Tx: ", len(attackerPending),
+		)
+
+		blockRequest = createBlock(ethservice, api, validatorKey, validatorAddr)
+
+		honestBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &honestAddrs[0])
+		attackerBlockTxsCount := countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs)
+
+		t.Log(
+			"Block Number of honest TXs: ", honestBlockTxsCount, "\n", 
+			"Block Number of attacker TXs: ", attackerBlockTxsCount,
+		)
+
+		honestBlockTxsCounts = append(honestBlockTxsCounts, honestBlockTxsCount)
+		attackerBlockTxsCounts = append(attackerBlockTxsCounts, attackerBlockTxsCount)	
+
+		node.Close()
+	}
+
+	t.Log("Number of honest pending transactions at each iteration:", honestPendingCounts)
+	t.Log("Number of attacker pending transactions at each iteration:", attackerPendingCounts)
+	
+	t.Log("Number of honest block transactions at each iteration:", honestBlockTxsCounts)
+	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
+
+	// Create a CSV file
+	file, err := os.Create("mempurge_change_addr.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	writer.Write([]string{"x", "honestPendingCounts", "attackerPendingCounts", "honestBlockTxsCounts", "attackerBlockTxsCounts"})
+
+	// Write the data
+	for i := 0; i < len(honestPendingCounts); i++ {
+		writer.Write([]string{
+			strconv.Itoa(i * 40 + 40),
+			strconv.Itoa(honestPendingCounts[i]),
+			strconv.Itoa(attackerPendingCounts[i]),
+			strconv.Itoa(honestBlockTxsCounts[i]),
+			strconv.Itoa(attackerBlockTxsCounts[i]),
+		})
+	}
+}

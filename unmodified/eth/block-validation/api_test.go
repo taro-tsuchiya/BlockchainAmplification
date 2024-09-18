@@ -1871,10 +1871,10 @@ func TestMemPurgeEvictsMempoolChangeNumAddr(t *testing.T) {
 	}
 }
 
-// EDoS attack tests
+// Amplification attack tests
 // Create invalid transactions (insufficient balance), 
 // Need to specify the large value (e.g., 1 ether) which is bigger than the account balance
-func createEDoSTxs(
+func createAmplificationTxs(
 	ethservice *eth.Ethereum, 
 	txPool *txpool.TxPool, signer types.Signer, addrs []common.Address,
 	keys []*ecdsa.PrivateKey, txNum uint64, to *common.Address,
@@ -1891,7 +1891,7 @@ func createEDoSTxs(
 		// fmt.Println("Current balance is : ", accountBalance)
 		
 		for curNum := uint64(0); curNum < txNum; curNum += 1 {
-			// Check if transfer value is smaller than accountBalance (not EDoS attack)
+			// Check if transfer value is smaller than accountBalance (not Amplification attack)
 			if value.Cmp(accountBalance) < 0 {
 				fmt.Println("Normal transaction (not invalid)")
 			}
@@ -1913,8 +1913,8 @@ func createEDoSTxs(
 	return txs
 }
 
-// The most basic EDoS attack 
-func TestEDoSBasis(t *testing.T) {
+// The most basic Amplification attack 
+func TestAmplificationBasis(t *testing.T) {
 	genesis, initBlocks, validatorKey, validatorAddr, _, _, attackerKeys, attackerAddrs := createState(10, attackCode, 1, 1, false)
 	node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
 	defer node.Close()
@@ -1933,7 +1933,7 @@ func TestEDoSBasis(t *testing.T) {
 
 	// Pay 10 times more than usual for the attacker's TXs
 	attackerFee := new(big.Int).Add(baseFee, big.NewInt(10))
-	for _, tx := range createEDoSTxs(
+	for _, tx := range createAmplificationTxs(
 		// send 1 ether
 		ethservice, txPool, signer, attackerAddrs, attackerKeys, 64,
 		&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,

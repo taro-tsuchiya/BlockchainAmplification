@@ -1584,10 +1584,10 @@ func executableDataToExecutionPayloadV2(data *engine.ExecutableData) (*capella.E
 	}, nil
 }
 
-// EDoS attack tests
+// Amplification attack tests
 // Create invalid transactions (insufficient balance), 
 // Need to specify the large value (e.g., 1 ether) which is bigger than the account balance
-func createEDoSTxs(
+func createAmplificationTxs(
 	ethservice *eth.Ethereum, 
 	txPool *txpool.TxPool, signer types.Signer, addrs []common.Address,
 	keys []*ecdsa.PrivateKey, txNum uint64, to *common.Address,
@@ -1604,7 +1604,7 @@ func createEDoSTxs(
 		// fmt.Println("Current balance is : ", accountBalance)
 		
 		for curNum := uint64(0); curNum < txNum; curNum += 1 {
-			// Check if transfer value is smaller than accountBalance (not EDoS attack)
+			// Check if transfer value is smaller than accountBalance (not Amplification attack)
 			if value.Cmp(accountBalance) < 0 {
 				fmt.Println("Normal transaction (not invalid)")
 			}
@@ -1626,8 +1626,8 @@ func createEDoSTxs(
 	return txs
 }
 
-// The most basic EDoS attack 
-func TestEDoSBasis(t *testing.T) {
+// The most basic Amplification attack 
+func TestAmplificationBasis(t *testing.T) {
 	genesis, initBlocks, validatorKey, validatorAddr, _, _, attackerKeys, attackerAddrs := createState(10, attackCode, 1, 1, false)
 	node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
 	defer node.Close()
@@ -1646,7 +1646,7 @@ func TestEDoSBasis(t *testing.T) {
 
 	// Pay 10 times more than usual for the attacker's TXs
 	attackerFee := new(big.Int).Add(baseFee, big.NewInt(10))
-	for _, tx := range createEDoSTxs(
+	for _, tx := range createAmplificationTxs(
 		// send 1 ether
 		ethservice, txPool, signer, attackerAddrs, attackerKeys, 64,
 		&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
@@ -1663,10 +1663,10 @@ func TestEDoSBasis(t *testing.T) {
 	require.EqualValues(t, 0, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
 }
 
-// TestEDoSEvictsMempoolOneAccount shows that an attacker can evict existing
+// TestAmplificationEvictsMempoolOneAccount shows that an attacker can evict existing
 // honest TXs from the mempool, if it is completely full by transactions from a
 // single honest account.
-func TestEDoSEvictsMempoolOneAccount(t *testing.T) {
+func TestAmplificationEvictsMempoolOneAccount(t *testing.T) {
 	// One honest attacker 
 	// create 10 init blocks 
 	genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs,
@@ -1707,7 +1707,7 @@ func TestEDoSEvictsMempoolOneAccount(t *testing.T) {
 	// Attacker can set a higher gas fee than honest users (no tx cost)
 	attackerFee := new(big.Int).Add(baseFee, big.NewInt(11))
 	// each attack account sends 64 txs
-	attackerTxs := createEDoSTxs(
+	attackerTxs := createAmplificationTxs(
 		ethservice, txPool, signer, attackerAddrs, attackerKeys, 64,
 		&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
 	)
@@ -1735,7 +1735,7 @@ func TestEDoSEvictsMempoolOneAccount(t *testing.T) {
 	require.GreaterOrEqual(t, 0, countTxsTo(blockRequest.ExecutionPayload.Transactions, &addrs))
 }
 
-func TestEDoSEvictsMempoolMultipleAccounts(t *testing.T) {
+func TestAmplificationEvictsMempoolMultipleAccounts(t *testing.T) {
 	genesis, initBlocks, validatorKey, validatorAddr, honestKeys, honestAddrs, attackerKeys, attackerAddrs := createState(10, attackCode, 80, 80, false)
 
 	node, ethservice, signer := createNode(genesis, initBlocks, validatorAddr, false, false)
@@ -1772,7 +1772,7 @@ func TestEDoSEvictsMempoolMultipleAccounts(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addrs := crypto.PubkeyToAddress(key.PublicKey)
 	attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
-	attackerTxs := createEDoSTxs(
+	attackerTxs := createAmplificationTxs(
 		ethservice, txPool, signer, attackerAddrs, attackerKeys, 32,
 		&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
 	)
@@ -1799,7 +1799,7 @@ func TestEDoSEvictsMempoolMultipleAccounts(t *testing.T) {
 }
 
 
-func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
+func TestAmplificationEvictsMempoolChangeNumAddr(t *testing.T) {
 	var honestPendingCounts []int
 	var attackerPendingCounts []int
 	var honestBlockTxsCounts []int
@@ -1848,7 +1848,7 @@ func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 		key, _ := crypto.GenerateKey()
 		addrs := crypto.PubkeyToAddress(key.PublicKey)
 		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
-		attackerTxs := createEDoSTxs(
+		attackerTxs := createAmplificationTxs(
 			ethservice, txPool, signer, attackerAddrs, attackerKeys, 32,
 			&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
 		)
@@ -1899,7 +1899,7 @@ func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
-	file, err := os.Create("edos_change_addr.csv")
+	file, err := os.Create("amplification_change_addr.csv")
     if err != nil {
         t.Fatal(err)
     }
@@ -1924,7 +1924,7 @@ func TestEDoSEvictsMempoolChangeNumAddr(t *testing.T) {
 }
 
 
-func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
+func TestAmplificationEvictsMempoolChangeNumTxs(t *testing.T) {
 	var honestPendingCounts []int
     var attackerPendingCounts []int
 	var honestBlockTxsCounts []int
@@ -1974,7 +1974,7 @@ func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
 		addrs := crypto.PubkeyToAddress(key.PublicKey)
 		attackerFee := new(big.Int).Mul(baseFee, big.NewInt(11))
 		// Change the number of txs to send
-		attackerTxs := createEDoSTxs(
+		attackerTxs := createAmplificationTxs(
 			ethservice, txPool, signer, attackerAddrs, attackerKeys, uint64(x),
 			&addrs, big.NewInt(1e18), 21000, attackerFee, attackerFee, nil,
 		)
@@ -2025,7 +2025,7 @@ func TestEDoSEvictsMempoolChangeNumTxs(t *testing.T) {
 	t.Log("Number of attacker block transactions at each iteration:", attackerBlockTxsCounts)
 
 	// Create a CSV file
-	file, err := os.Create("edos_change_txs.csv")
+	file, err := os.Create("amplification_change_txs.csv")
     if err != nil {
         t.Fatal(err)
     }

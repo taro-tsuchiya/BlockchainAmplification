@@ -1,14 +1,14 @@
-# Blockchain Economic Denial of Sustainability Attack 
+# Blockchain Amplification Attack 
 
 We implement our attack simulation on the top of our related work [SpeculativeDoS](https://github.com/AvivYaish/SpeculativeDoS). 
 Please refer to our commit history to review the modifications made to the existing settings. 
 We begin modifying the codebase after the 3rd commit.
 
-To reproduce our resuts, please do the following.
+To reproduce our results, please do the following.
 1. Clone our repository, and install Go version higher than 1.19 but lower than 1.23 on your machine. (The current go 1.23 has an issue in runtime package when you compile from the sourcecode)
 2. Move to the test location. 
 
-For EDoS attack 
+For Amplification attack 
 ```
 cd modified/eth/block-validation
 ```
@@ -18,9 +18,9 @@ For MemPurge and Baseline attack
 cd unmodified/eth/block-validation
 ``` 
 
-3. Run the tests. For example, if you want to run TestEDoSBasis
+3. Run the tests. For example, if you want to run TestAmplificationBasis
 ```
-go test -v -run=TestEDoSBasis -timeout=0s
+go test -v -run=TestAmplificationBasis -timeout=0s
 ```
 
 ## Remarks
@@ -31,7 +31,7 @@ go test -v -run=TestEDoSBasis -timeout=0s
 - We also ensure that the gas price for each attack transaction remains consistent across different attacks.
 - We employ the same set of parameters use in Geth or SpeculativeDoS. 
 - For example, the txpool size is 6334 (5120 global slots and 1024 global queue). Generally, the txpool only utilizes the global slot unless the number of accounts exceeds a certain threshold (typically more than 5120/16=320 accounts).
-- Here, we test our EDoS attack on the modified node, and Baseline and MemPurge on the unmodified node. You can yield the exact same results when testing all three attacks on the modified nodes. 
+- Here, we test our Amplification attack on the modified node, and Baseline and MemPurge on the unmodified node. You can yield the exact same results when testing all three attacks on the modified nodes as well. 
 
 
 # Tests
@@ -39,16 +39,16 @@ Below, we explain the purpose of each test and what it aims to verify.
 
 ## Modified node 
 (Test location: ``modified/eth/block-validation/api_test.go``.)
-We test our EDoS attack on our modified node. 
+We test our Amplification attack on our modified node. 
 
-### TestEDoSBasis
+### TestAmplificationBasis
 - We follow the setting from ``TestMemPurgePendingDependsOnFirst``. 
 - 1 attack account. 
 - The attacker sends 64 transactions with insufficient and previously used nonce (to the randomly generated accounts). 
 - The modified node accepts all of invalid attack transactions and insert them into its txpool.
 - If the block is mined, no attack transaction is included into the block.
 
-### TestEDoSEvictsMempoolOneAccount
+### TestAmplificationEvictsMempoolOneAccount
 - We adhere to the settings used in ``TestMemPurgeEvictsMempoolOneAccount``.
 - 1 honest account, and 79 accounts. 
 - An honest account initially sends 5120 transactions to completely fill the txpool.
@@ -57,20 +57,20 @@ We test our EDoS attack on our modified node.
 - After the attack, some honest transactions are evicted from the txpool and replaced by the attackers. 
 - If the block were to be created, no attack transactions are included in the block. This aspect distinguishes our attack from MemPurge or the Baseline approach.
 
-### TestEDoSEvictsMempoolMultipleAccounts
+### TestAmplificationEvictsMempoolMultipleAccounts
 - We adhere to the settings used in ``TestMemPurgeEvictsMempoolMultipleAccounts``. 
-- The test resembles ``TestEDoSEvictsMempoolOneAccount``, but in this case, the txpool is filled by multiple honest accounts, making eviction more challenging. 
+- The test resembles ``TestAmplificationEvictsMempoolOneAccount``, but in this case, the txpool is filled by multiple honest accounts, making eviction more challenging. 
 - Each honest account initially sends 64 transactions to collectively fill the txpool.
 - Each attack account sends 32 invalid transactions (insufficient balance, past nonce).
 - After the attack, some honest transactions are evicted and replaced by the attackers, but attack transaction is never included in the block. 
 
-### TestEDoSEvictsMempoolChangeNumAddr
-- Same as ``TestEDoSEvictsMempoolMultipleAccounts``, but we vary the number of attack accounts from 40 to 2000.
-- Produce a csv file (``edos_change_addr.csv``)
+### TestAmplificationEvictsMempoolChangeNumAddr
+- Same as ``TestAmplificationEvictsMempoolMultipleAccounts``, but we vary the number of attack accounts from 40 to 2000.
+- Produce a csv file (``amplification_change_addr.csv``)
 
-### TestEDoSEvictsMempoolChangeNumTxs
-- Same as ``TestEDoSEvictsMempoolMultipleAccounts``, but we calibrate the number of attack transactions each attacker sends from 8 to 256.
-- Produce a csv file (``edos_change_txs.csv``)
+### TestAmplificationEvictsMempoolChangeNumTxs
+- Same as ``TestAmplificationEvictsMempoolMultipleAccounts``, but we calibrate the number of attack transactions each attacker sends from 8 to 256.
+- Produce a csv file (``amplification_change_txs.csv``)
 
 ### Unmodified (regular) node
 (Test location: ``unmodified/eth/block-validation/api_test.go``.)
@@ -93,7 +93,7 @@ We test 1) the Baseline approach: – sending transactions with higher gas price
 - Same test as ``TestMemPurgeEvictsMempoolMultipleAccounts`` (impelemented in SpeculativeDoS), but we vary the number of attack accounts from 40 to 2000.
 - Produce a csv file (``mempurge_change_addr.csv``)
 
-### TestEDoSBasis
+### TestAmplificationBasis
 - Same test we implement in ``modified/eth/block-validation/api_test.go``
 - The test should not meet the requirements here and fail to be executed in the middle; the attack transactions will always be rejected by an unmodified (regular) node's txpool.
 
